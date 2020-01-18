@@ -1,0 +1,80 @@
+From 5ab19576f9f78e206ae47ed37091c267f8f5698b Mon Sep 17 00:00:00 2001
+From: Petr Oros <poros@redhat.com>
+Date: Tue, 9 Aug 2016 11:25:45 +0200
+Subject: [PATCH] Backport qede for kernel-3.10.0-327.el7
+
+Signed-off-by: Petr Oros <poros@redhat.com>
+---
+ drivers/net/ethernet/qlogic/qede/qede_main.c | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/net/ethernet/qlogic/qede/qede_main.c b/drivers/net/ethernet/qlogic/qede/qede_main.c
+index 6d91796..10bb2b9 100644
+--- a/drivers/net/ethernet/qlogic/qede/qede_main.c
++++ b/drivers/net/ethernet/qlogic/qede/qede_main.c
+@@ -188,7 +188,7 @@ static struct qed_eth_cb_ops qede_ll_ops = {
+ static int qede_netdev_event(struct notifier_block *this, unsigned long event,
+ 			     void *ptr)
+ {
+-	struct net_device *ndev = netdev_notifier_info_to_dev(ptr);
++	struct net_device *ndev = ptr;
+ 	struct ethtool_drvinfo drvinfo;
+ 	struct qede_dev *edev;
+ 
+@@ -236,7 +236,7 @@ int __init qede_init(void)
+ 	/* Must register notifier before pci ops, since we might miss
+ 	 * interface rename after pci probe and netdev registeration.
+ 	 */
+-	ret = register_netdevice_notifier_rh(&qede_netdev_notifier);
++	ret = register_netdevice_notifier(&qede_netdev_notifier);
+ 	if (ret) {
+ 		pr_notice("Failed to register netdevice_notifier\n");
+ 		qed_put_eth_ops();
+@@ -246,7 +246,7 @@ int __init qede_init(void)
+ 	ret = pci_register_driver(&qede_pci_driver);
+ 	if (ret) {
+ 		pr_notice("Failed to register driver\n");
+-		unregister_netdevice_notifier_rh(&qede_netdev_notifier);
++		unregister_netdevice_notifier(&qede_netdev_notifier);
+ 		qed_put_eth_ops();
+ 		return -EINVAL;
+ 	}
+@@ -258,7 +258,7 @@ static void __exit qede_cleanup(void)
+ {
+ 	pr_notice("qede_cleanup called\n");
+ 
+-	unregister_netdevice_notifier_rh(&qede_netdev_notifier);
++	unregister_netdevice_notifier(&qede_netdev_notifier);
+ 	pci_unregister_driver(&qede_pci_driver);
+ 	qed_put_eth_ops();
+ }
+@@ -920,7 +920,7 @@ static inline int qede_realloc_rx_buffer(struct qede_dev *edev,
+ 		 * network stack to take the ownership of the page
+ 		 * which can be recycled multiple times by the driver.
+ 		 */
+-		page_ref_inc(curr_cons->data);
++		atomic_inc(&curr_cons->data->_count);
+ 		qede_reuse_page(edev, rxq, curr_cons);
+ 	}
+ 
+@@ -1036,7 +1036,7 @@ static int qede_fill_frag_skb(struct qede_dev *edev,
+ 		/* Incr page ref count to reuse on allocation failure
+ 		 * so that it doesn't get freed while freeing SKB.
+ 		 */
+-		page_ref_inc(current_bd->data);
++		atomic_inc(&current_bd->data->_count);
+ 		goto out;
+ 	}
+ 
+@@ -1486,7 +1486,7 @@ static int qede_rx_int(struct qede_fastpath *fp, int budget)
+ 				 * freeing SKB.
+ 				 */
+ 
+-				page_ref_inc(sw_rx_data->data);
++				atomic_inc(&sw_rx_data->data->_count);
+ 				rxq->rx_alloc_errors++;
+ 				qede_recycle_rx_bd_ring(rxq, edev,
+ 							fp_cqe->bd_num);
+-- 
+1.8.3.1
+
